@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "420975228049",
+    "project_id": "utm-paws-itive",
+    "storage_bucket": "utm-paws-itive.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:420975228049:android:14ff0d04ef1332552b7b30",
+        "android_client_info": {
+          "package_name": "com.example.utm_pawsitive"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEy3klHGsYgr7DfsDNAV1PGMunyFyF2bg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

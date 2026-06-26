@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Firebase Storage rules for UTM Paws-itive.
+// Cat report photos live under cats/{catId}/... and must be readable by any
+// signed-in user (so cat profiles render) and writable by any signed-in user
+// (so reporting an animal can upload its photo).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /cats/{catId}/{fileName=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Anything else stays locked down by default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,112 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function role() {
+      return signedIn() && userDoc() != null ? userDoc().role : 'user';
+    }
+
+    function isAdmin() {
+      return signedIn() && role() == 'admin';
+    }
+
+    function isVolunteer() {
+      return signedIn() && (role() == 'volunteer' || role() == 'admin');
+    }
+
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if isSelf(userId) || isAdmin();
+      allow create: if signedIn() && isSelf(userId);
+      allow update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /volunteers/{userId} {
+      allow read: if isVolunteer();
+      allow create, update: if isAdmin() || isSelf(userId);
+      allow delete: if isAdmin();
+    }
+
+    match /admins/{userId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /cats/{catId} {
+      allow read: if signedIn();
+      // Any signed-in user can create/update a cat profile when reporting an
+      // animal. Volunteers/admins additionally curate them via the cases flow.
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if isVolunteer();
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn();
+      // Signed-in users can raise notifications (e.g. when filing a report) and
+      // mark them read; only admins can remove them.
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /donations/{donationId} {
+      // Donors can read back their own donations; admins see everything.
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /shop_items/{itemId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /leaderboard/{entryId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /clinics/{clinicId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /fundraising/{projectId} {
+      allow read: if signedIn();
+      // Volunteers/admins create and manage projects. Any signed-in user can
+      // update (so donations can increment the raised amount).
+      allow create: if isVolunteer();
+      allow update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /fund_requests/{requestId} {
+      allow read: if isAdmin() || isVolunteer() || (signedIn() && resource.data.requestedBy == request.auth.uid);
+      allow create: if signedIn();
+      allow update, delete: if isAdmin();
+    }
+  }
+}
