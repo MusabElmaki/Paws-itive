@@ -1,4 +1,83 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "reporterId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "urgency",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "escalated",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "responseDueAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetUserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "audience",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

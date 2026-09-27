@@ -2,16 +2,13 @@
     <!-- Required for Firebase, Google Maps tiles, and image uploads -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- tflite_flutter requires hardware acceleration (already enabled below) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="utm_pawsitive"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-        <!-- Google Maps API key. Replace YOUR_GOOGLE_MAPS_API_KEY with a real
-             key from https://console.cloud.google.com/ (Maps SDK for Android
-             enabled). Without a valid key the map tiles render blank. -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyAGS07Got1WqgXjZF-kFBD_Ogw0qYhnTWs"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -54,6 +51,17 @@
         <intent>
             <action android:name="android.intent.action.DIAL"/>
             <data android:scheme="tel"/>
+        </intent>
+        <!-- Allows url_launcher to open https links (Stripe checkout) in a
+             browser. Required on Android 11+ (API 30) or canLaunchUrl()
+             returns false and the Stripe Payment Link never opens. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
         </intent>
     </queries>
 </manifest>

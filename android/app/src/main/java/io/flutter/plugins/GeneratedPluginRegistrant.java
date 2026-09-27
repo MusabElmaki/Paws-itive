@@ -21,6 +21,16 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin cloud_firestore, io.flutter.plugins.firebase.firestore.FlutterFirebaseFirestorePlugin", e);
     }
     try {
+      flutterEngine.getPlugins().add(new io.flutter.plugins.firebase.functions.FlutterFirebaseFunctionsPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin cloud_functions, io.flutter.plugins.firebase.functions.FlutterFirebaseFunctionsPlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new com.mr.flutter.plugin.filepicker.FilePickerPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin file_picker, com.mr.flutter.plugin.filepicker.FilePickerPlugin", e);
+    }
+    try {
       flutterEngine.getPlugins().add(new io.flutter.plugins.firebase.auth.FlutterFirebaseAuthPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin firebase_auth, io.flutter.plugins.firebase.auth.FlutterFirebaseAuthPlugin", e);
@@ -46,9 +56,9 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin flutter_plugin_android_lifecycle, io.flutter.plugins.flutter_plugin_android_lifecycle.FlutterAndroidLifecyclePlugin", e);
     }
     try {
-      flutterEngine.getPlugins().add(new io.flutter.plugins.googlemaps.GoogleMapsPlugin());
+      flutterEngine.getPlugins().add(new com.baseflow.geolocator.GeolocatorPlugin());
     } catch (Exception e) {
-      Log.e(TAG, "Error registering plugin google_maps_flutter_android, io.flutter.plugins.googlemaps.GoogleMapsPlugin", e);
+      Log.e(TAG, "Error registering plugin geolocator_android, com.baseflow.geolocator.GeolocatorPlugin", e);
     }
     try {
       flutterEngine.getPlugins().add(new io.flutter.plugins.imagepicker.ImagePickerPlugin());
@@ -64,6 +74,16 @@ public final class GeneratedPluginRegistrant {
       flutterEngine.getPlugins().add(new com.github.dart_lang.jni_flutter.JniFlutterPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin jni_flutter, com.github.dart_lang.jni_flutter.JniFlutterPlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new dev.fluttercommunity.plus.packageinfo.PackageInfoPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin package_info_plus, dev.fluttercommunity.plus.packageinfo.PackageInfoPlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin shared_preferences_android, io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin", e);
     }
     try {
       flutterEngine.getPlugins().add(new io.flutter.plugins.urllauncher.UrlLauncherPlugin());

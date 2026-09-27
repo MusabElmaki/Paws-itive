@@ -1,22 +1,21 @@
-<<<<<<< HEAD
-# utm_pawsitive
+# UTM Paws-itive
 
-A new Flutter project.
+Flutter and Firebase application for reporting and coordinating campus cat care.
 
-## Getting Started
+The updated app uses verified email accounts, approved volunteer roles, transactional
+case assignment, preserved care timelines, GPS/map sightings, saved report drafts,
+reviewable duplicate suggestions, private payment evidence and server-verified payments.
 
-This project is a starting point for a Flutter application.
+Read [deployment and upgrade instructions](docs/DEPLOYMENT.md) before running against
+an existing project. Deploy the new Cloud Functions, rules and indexes together.
+Stripe and bank configuration are supplied separately; no live service was deployed
+as part of this source update.
 
-A few resources to get you started if this is your first Flutter project:
+```powershell
+flutter pub get
+flutter analyze --no-pub
+flutter test --no-pub
+flutter run
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
-# UTM-Paws-itive
-UTM Paws-itive is a mobile application developed using Flutter and Firebase to support stray animal reporting and management within Universiti Teknologi Malaysia (UTM).
->>>>>>> 4afcd88fb93b0df0d8f2bd97a867e8142d6d0f40
+Backend tests and data migration guidance are in `docs/DEPLOYMENT.md`.

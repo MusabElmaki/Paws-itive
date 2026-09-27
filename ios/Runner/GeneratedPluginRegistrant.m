@@ -12,6 +12,18 @@
 @import cloud_firestore;
 #endif
 
+#if __has_include(<cloud_functions/FirebaseFunctionsPlugin.h>)
+#import <cloud_functions/FirebaseFunctionsPlugin.h>
+#else
+@import cloud_functions;
+#endif
+
+#if __has_include(<file_picker/FilePickerPlugin.h>)
+#import <file_picker/FilePickerPlugin.h>
+#else
+@import file_picker;
+#endif
+
 #if __has_include(<firebase_auth/FLTFirebaseAuthPlugin.h>)
 #import <firebase_auth/FLTFirebaseAuthPlugin.h>
 #else
@@ -36,16 +48,28 @@
 @import firebase_storage;
 #endif
 
-#if __has_include(<google_maps_flutter_ios/FGMGoogleMapsPlugin.h>)
-#import <google_maps_flutter_ios/FGMGoogleMapsPlugin.h>
+#if __has_include(<geolocator_apple/GeolocatorPlugin.h>)
+#import <geolocator_apple/GeolocatorPlugin.h>
 #else
-@import google_maps_flutter_ios;
+@import geolocator_apple;
 #endif
 
 #if __has_include(<image_picker_ios/FLTImagePickerPlugin.h>)
 #import <image_picker_ios/FLTImagePickerPlugin.h>
 #else
 @import image_picker_ios;
+#endif
+
+#if __has_include(<package_info_plus/FPPPackageInfoPlusPlugin.h>)
+#import <package_info_plus/FPPPackageInfoPlusPlugin.h>
+#else
+@import package_info_plus;
+#endif
+
+#if __has_include(<shared_preferences_foundation/SharedPreferencesPlugin.h>)
+#import <shared_preferences_foundation/SharedPreferencesPlugin.h>
+#else
+@import shared_preferences_foundation;
 #endif
 
 #if __has_include(<url_launcher_ios/URLLauncherPlugin.h>)
@@ -58,12 +82,16 @@
 
 + (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry {
   [FLTFirebaseFirestorePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseFirestorePlugin"]];
+  [FirebaseFunctionsPlugin registerWithRegistrar:[registry registrarForPlugin:@"FirebaseFunctionsPlugin"]];
+  [FilePickerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FilePickerPlugin"]];
   [FLTFirebaseAuthPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseAuthPlugin"]];
   [FLTFirebaseCorePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseCorePlugin"]];
   [FLTFirebaseMessagingPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseMessagingPlugin"]];
   [FLTFirebaseStoragePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseStoragePlugin"]];
-  [FGMGoogleMapsPlugin registerWithRegistrar:[registry registrarForPlugin:@"FGMGoogleMapsPlugin"]];
+  [GeolocatorPlugin registerWithRegistrar:[registry registrarForPlugin:@"GeolocatorPlugin"]];
   [FLTImagePickerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTImagePickerPlugin"]];
+  [FPPPackageInfoPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"FPPPackageInfoPlusPlugin"]];
+  [SharedPreferencesPlugin registerWithRegistrar:[registry registrarForPlugin:@"SharedPreferencesPlugin"]];
   [URLLauncherPlugin registerWithRegistrar:[registry registrarForPlugin:@"URLLauncherPlugin"]];
 }
 

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../core/domain.dart';
 import '../core/services.dart';
 import '../features/feature_pages.dart';
+import '../features/account_recovery.dart';
+import '../features/workflow_pages.dart';
 import '../theme/app_theme.dart';
 
 class UtmPawsitiveApp extends StatelessWidget {
@@ -34,10 +36,12 @@ class AuthGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: FirebaseAuth.instance.idTokenChanges(),
       builder: (context, authSnapshot) {
         if (authSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         final user = authSnapshot.data;
@@ -45,23 +49,45 @@ class AuthGate extends StatelessWidget {
           return const LoginScreen();
         }
 
+        if (!user.emailVerified) return const VerifyEmailPage();
+
         return StreamBuilder<AppUserProfile?>(
           stream: FirestoreGateway.instance.watchUser(user.uid),
           builder: (context, profileSnapshot) {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
             }
 
+            if (profileSnapshot.hasError) {
+              return Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Could not load your profile. Check your connection.',
+                      ),
+                      TextButton(
+                        onPressed: () => AuthService.instance.signOut(),
+                        child: const Text('Sign out'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
             final profile = profileSnapshot.data;
             if (profile == null) {
-              return const _MissingProfile();
+              return const RecoverProfilePage();
             }
 
             if (profile.isSuspended) {
               return _SuspendedAccount(profile: profile);
             }
 
-            return RoleShell(profile: profile);
+            return RoleShell(key: ValueKey(user.uid), profile: profile);
           },
         );
       },
@@ -79,12 +105,29 @@ class RoleShell extends StatefulWidget {
 }
 
 class _RoleShellState extends State<RoleShell> {
-  late int _index = 0;
+  int _index = 0;
+  @override
+  void initState() {
+    super.initState();
+    NotificationBridge.instance.initialize(widget.profile.uid);
+  }
+
+  @override
+  void dispose() {
+    NotificationBridge.instance.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pages = _pagesForRole(widget.profile.role);
-    final destinations = _destinationsForRole(widget.profile.role);
+    final role =
+        widget.profile.role == UserRole.volunteer &&
+            (!widget.profile.isApprovedVolunteer ||
+                widget.profile.status != UserStatus.active)
+        ? UserRole.user
+        : widget.profile.role;
+    final pages = _pagesForRole(role);
+    final destinations = _destinationsForRole(role);
 
     if (_index >= pages.length) {
       _index = 0;
@@ -94,8 +137,20 @@ class _RoleShellState extends State<RoleShell> {
       appBar: AppBar(
         title: Text(widget.profile.role.label),
         actions: [
+          if (role != UserRole.user)
+            IconButton(
+              tooltip: 'Review similar sightings',
+              icon: const Icon(Icons.compare),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ReviewQueuePage()),
+              ),
+            ),
           IconButton(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NotificationsPage(profile: widget.profile))),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => NotificationsPage(profile: widget.profile),
+              ),
+            ),
             icon: const Icon(Icons.notifications_none),
           ),
           IconButton(
@@ -146,54 +201,89 @@ class _RoleShellState extends State<RoleShell> {
     switch (role) {
       case UserRole.admin:
         return const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Overview'),
-          NavigationDestination(icon: Icon(Icons.fact_check_outlined), selectedIcon: Icon(Icons.fact_check), label: 'Reports'),
-          NavigationDestination(icon: Icon(Icons.pets_outlined), selectedIcon: Icon(Icons.pets), label: 'Cats'),
-          NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Shop'),
-          NavigationDestination(icon: Icon(Icons.admin_panel_settings_outlined), selectedIcon: Icon(Icons.admin_panel_settings), label: 'Admin'),
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Overview',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.fact_check_outlined),
+            selectedIcon: Icon(Icons.fact_check),
+            label: 'Reports',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.pets_outlined),
+            selectedIcon: Icon(Icons.pets),
+            label: 'Cats',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront),
+            label: 'Shop',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.admin_panel_settings_outlined),
+            selectedIcon: Icon(Icons.admin_panel_settings),
+            label: 'Admin',
+          ),
         ];
       case UserRole.volunteer:
         return const [
-          NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Cases'),
-          NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: 'Map'),
-          NavigationDestination(icon: Icon(Icons.pets_outlined), selectedIcon: Icon(Icons.pets), label: 'Cats'),
-          NavigationDestination(icon: Icon(Icons.emoji_events_outlined), selectedIcon: Icon(Icons.emoji_events), label: 'Rankings'),
-          NavigationDestination(icon: Icon(Icons.person_outlined), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(
+            icon: Icon(Icons.assignment_outlined),
+            selectedIcon: Icon(Icons.assignment),
+            label: 'Cases',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map),
+            label: 'Map',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.pets_outlined),
+            selectedIcon: Icon(Icons.pets),
+            label: 'Cats',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.emoji_events_outlined),
+            selectedIcon: Icon(Icons.emoji_events),
+            label: 'Rankings',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outlined),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
         ];
       case UserRole.user:
         return const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.add_a_photo_outlined), selectedIcon: Icon(Icons.add_a_photo), label: 'Report'),
-          NavigationDestination(icon: Icon(Icons.pets_outlined), selectedIcon: Icon(Icons.pets), label: 'Cats'),
-          NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Shop'),
-          NavigationDestination(icon: Icon(Icons.person_outlined), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.add_a_photo_outlined),
+            selectedIcon: Icon(Icons.add_a_photo),
+            label: 'Report',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.pets_outlined),
+            selectedIcon: Icon(Icons.pets),
+            label: 'Cats',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront),
+            label: 'Shop',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outlined),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
         ];
     }
-  }
-}
-
-class _MissingProfile extends StatelessWidget {
-  const _MissingProfile();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 68),
-              const SizedBox(height: 12),
-              Text('Profile not found', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 8),
-              const Text('Contact an administrator to complete your account setup.'),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -213,9 +303,16 @@ class _SuspendedAccount extends StatelessWidget {
             children: [
               const Icon(Icons.block, size: 68, color: Colors.red),
               const SizedBox(height: 12),
-              Text('Account suspended', style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                'Account suspended',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 8),
               Text('${profile.fullName} cannot access the system right now.'),
+              TextButton(
+                onPressed: () => AuthService.instance.signOut(),
+                child: const Text('Sign out'),
+              ),
             ],
           ),
         ),

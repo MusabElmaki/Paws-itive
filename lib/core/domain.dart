@@ -1,17 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum UserRole { user, volunteer, admin }
+
 enum UserStatus { active, pending, suspended }
+
 enum CatClassification { stray, domestic }
+
 enum CatHealthStatus { unknown, healthy, injured, sick, recovering, critical }
+
 enum ReportStatus { reported, underReview, beingAssisted, resolved }
 
 extension UserRoleX on UserRole {
   String get label => switch (this) {
-        UserRole.user => 'User',
-        UserRole.volunteer => 'Volunteer',
-        UserRole.admin => 'Admin',
-      };
+    UserRole.user => 'User',
+    UserRole.volunteer => 'Volunteer',
+    UserRole.admin => 'Admin',
+  };
 }
 
 extension UserStatusX on UserStatus {
@@ -20,22 +24,88 @@ extension UserStatusX on UserStatus {
 
 extension ReportStatusX on ReportStatus {
   String get label => switch (this) {
-        ReportStatus.reported => 'Reported',
-        ReportStatus.underReview => 'Under Review',
-        ReportStatus.beingAssisted => 'Being Assisted',
-        ReportStatus.resolved => 'Resolved',
-      };
+    ReportStatus.reported => 'Reported',
+    ReportStatus.underReview => 'Under Review',
+    ReportStatus.beingAssisted => 'Being Assisted',
+    ReportStatus.resolved => 'Resolved',
+  };
 }
 
 extension CatHealthStatusX on CatHealthStatus {
   String get label => switch (this) {
-        CatHealthStatus.unknown => 'Unknown',
-        CatHealthStatus.healthy => 'Healthy',
-        CatHealthStatus.injured => 'Injured',
-        CatHealthStatus.sick => 'Sick',
-        CatHealthStatus.recovering => 'Recovering',
-        CatHealthStatus.critical => 'Critical',
-      };
+    CatHealthStatus.unknown => 'Unknown',
+    CatHealthStatus.healthy => 'Healthy',
+    CatHealthStatus.injured => 'Injured',
+    CatHealthStatus.sick => 'Sick',
+    CatHealthStatus.recovering => 'Recovering',
+    CatHealthStatus.critical => 'Critical',
+  };
+}
+
+/// Reward tiers earned by accumulating contribution points. Each tier unlocks a
+/// shop discount for the student — the tangible benefit of ranking up.
+enum RankTier { bronze, silver, gold, platinum }
+
+extension RankTierX on RankTier {
+  String get label => switch (this) {
+    RankTier.bronze => 'Bronze',
+    RankTier.silver => 'Silver',
+    RankTier.gold => 'Gold',
+    RankTier.platinum => 'Platinum',
+  };
+
+  String get emoji => switch (this) {
+    RankTier.bronze => '🥉',
+    RankTier.silver => '🥈',
+    RankTier.gold => '🥇',
+    RankTier.platinum => '💎',
+  };
+
+  /// Fraction off in the shop (0.0–1.0).
+  double get discount => switch (this) {
+    RankTier.bronze => 0.0,
+    RankTier.silver => 0.05,
+    RankTier.gold => 0.10,
+    RankTier.platinum => 0.15,
+  };
+
+  /// Points needed to reach the next tier. Platinum is the cap (returns its own
+  /// floor so progress shows as complete).
+  int get nextThreshold => switch (this) {
+    RankTier.bronze => 100,
+    RankTier.silver => 300,
+    RankTier.gold => 600,
+    RankTier.platinum => 600,
+  };
+
+  int get floor => switch (this) {
+    RankTier.bronze => 0,
+    RankTier.silver => 100,
+    RankTier.gold => 300,
+    RankTier.platinum => 600,
+  };
+}
+
+/// Maps a point total to its reward tier.
+RankTier rankTierFor(int points) {
+  if (points >= 600) return RankTier.platinum;
+  if (points >= 300) return RankTier.gold;
+  if (points >= 100) return RankTier.silver;
+  return RankTier.bronze;
+}
+
+/// Central point schedule so every contribution awards a consistent amount.
+class RankPoints {
+  RankPoints._();
+
+  static const int report = 15; // filing a cat report
+  static const int acceptCase = 10; // volunteer takes a case
+  static const int statusUpdate = 5; // health / status change
+  static const int resolveCase = 30; // case successfully closed
+
+  /// Points earned for spending money (donations + shop purchases): 1 point per
+  /// RM, so a RM100 supporter reaches the Silver tier.
+  static int forSpend(double amount) => amount <= 0 ? 0 : amount.round();
 }
 
 class AppUserProfile {
@@ -68,18 +138,18 @@ class AppUserProfile {
   final bool isSuspended;
 
   Map<String, dynamic> toMap() => {
-        'email': email,
-        'fullName': fullName,
-        'role': role.name,
-        'status': status.name,
-        'createdAt': Timestamp.fromDate(createdAt),
-        'phoneNumber': phoneNumber,
-        'photoUrl': photoUrl,
-        'bio': bio,
-        'points': points,
-        'isApprovedVolunteer': isApprovedVolunteer,
-        'isSuspended': isSuspended,
-      };
+    'email': email,
+    'fullName': fullName,
+    'role': role.name,
+    'status': status.name,
+    'createdAt': Timestamp.fromDate(createdAt),
+    'phoneNumber': phoneNumber,
+    'photoUrl': photoUrl,
+    'bio': bio,
+    'points': points,
+    'isApprovedVolunteer': isApprovedVolunteer,
+    'isSuspended': isSuspended,
+  };
 
   static AppUserProfile fromMap(String uid, Map<String, dynamic> data) {
     return AppUserProfile(
@@ -119,6 +189,8 @@ class CatReport {
     this.assignedVolunteerId,
     this.analysisLabel = 'Cat',
     this.analysisConfidence = 0,
+    this.catName = '',
+    this.reportedCondition = '',
   });
 
   final String id;
@@ -131,6 +203,8 @@ class CatReport {
   final double? longitude;
   final String description;
   final ReportStatus status;
+  final String catName; // optional name the reporter gave the cat
+  final String reportedCondition; // e.g. Injured, Needs feeding, Other
   final List<double> imageSignature;
   final String duplicateMessage;
   final double duplicateConfidence;
@@ -141,24 +215,26 @@ class CatReport {
   final DateTime updatedAt;
 
   Map<String, dynamic> toMap() => {
-        'reporterId': reporterId,
-        'reporterName': reporterName,
-        'catId': catId,
-        'photoUrl': photoUrl,
-        'locationName': locationName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'description': description,
-        'status': status.name,
-        'imageSignature': imageSignature,
-        'duplicateMessage': duplicateMessage,
-        'duplicateConfidence': duplicateConfidence,
-        'assignedVolunteerId': assignedVolunteerId,
-        'analysisLabel': analysisLabel,
-        'analysisConfidence': analysisConfidence,
-        'createdAt': Timestamp.fromDate(createdAt),
-        'updatedAt': Timestamp.fromDate(updatedAt),
-      };
+    'reporterId': reporterId,
+    'reporterName': reporterName,
+    'catId': catId,
+    'photoUrl': photoUrl,
+    'locationName': locationName,
+    'latitude': latitude,
+    'longitude': longitude,
+    'description': description,
+    'status': status.name,
+    'catName': catName,
+    'reportedCondition': reportedCondition,
+    'imageSignature': imageSignature,
+    'duplicateMessage': duplicateMessage,
+    'duplicateConfidence': duplicateConfidence,
+    'assignedVolunteerId': assignedVolunteerId,
+    'analysisLabel': analysisLabel,
+    'analysisConfidence': analysisConfidence,
+    'createdAt': Timestamp.fromDate(createdAt),
+    'updatedAt': Timestamp.fromDate(updatedAt),
+  };
 
   static CatReport fromMap(String id, Map<String, dynamic> data) {
     return CatReport(
@@ -172,9 +248,16 @@ class CatReport {
       longitude: (data['longitude'] as num?)?.toDouble(),
       description: (data['description'] ?? '').toString(),
       status: _reportStatusFrom(data['status']?.toString()),
-      imageSignature: (data['imageSignature'] as List?)?.map((value) => (value as num).toDouble()).toList(growable: false) ?? const [],
+      catName: (data['catName'] ?? '').toString(),
+      reportedCondition: (data['reportedCondition'] ?? '').toString(),
+      imageSignature:
+          (data['imageSignature'] as List?)
+              ?.map((value) => (value as num).toDouble())
+              .toList(growable: false) ??
+          const [],
       duplicateMessage: (data['duplicateMessage'] ?? '').toString(),
-      duplicateConfidence: (data['duplicateConfidence'] as num?)?.toDouble() ?? 0,
+      duplicateConfidence:
+          (data['duplicateConfidence'] as num?)?.toDouble() ?? 0,
       assignedVolunteerId: data['assignedVolunteerId']?.toString(),
       analysisLabel: (data['analysisLabel'] ?? 'Cat').toString(),
       analysisConfidence: (data['analysisConfidence'] as num?)?.toDouble() ?? 0,
@@ -222,40 +305,65 @@ class CatProfile {
   final String? matchedReportId;
 
   Map<String, dynamic> toMap() => {
-        'name': name,
-        'photoUrls': photoUrls,
-        'currentLocationName': currentLocationName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'healthStatus': healthStatus.name,
-        'classification': classification.name,
-        'feedingHistory': feedingHistory,
-        'volunteerNotes': volunteerNotes,
-        'medicalNotes': medicalNotes,
-        'reportIds': reportIds,
-        'imageSignature': imageSignature,
-        'currentStatus': currentStatus.name,
-        'lastUpdated': Timestamp.fromDate(lastUpdated),
-        'matchedReportId': matchedReportId,
-      };
+    'name': name,
+    'photoUrls': photoUrls,
+    'currentLocationName': currentLocationName,
+    'latitude': latitude,
+    'longitude': longitude,
+    'healthStatus': healthStatus.name,
+    'classification': classification.name,
+    'feedingHistory': feedingHistory,
+    'volunteerNotes': volunteerNotes,
+    'medicalNotes': medicalNotes,
+    'reportIds': reportIds,
+    'imageSignature': imageSignature,
+    'currentStatus': currentStatus.name,
+    'lastUpdated': Timestamp.fromDate(lastUpdated),
+    'matchedReportId': matchedReportId,
+  };
 
   static CatProfile fromMap(String id, Map<String, dynamic> data) {
     return CatProfile(
       id: id,
       name: data['name']?.toString(),
-      photoUrls: (data['photoUrls'] as List?)?.map((value) => value.toString()).toList(growable: false) ?? const [],
+      photoUrls:
+          (data['photoUrls'] as List?)
+              ?.map((value) => value.toString())
+              .toList(growable: false) ??
+          const [],
       currentLocationName: (data['currentLocationName'] ?? '').toString(),
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
       healthStatus: _healthFrom(data['healthStatus']?.toString()),
       classification: _classificationFrom(data['classification']?.toString()),
-      feedingHistory: (data['feedingHistory'] as List?)?.map((value) => value.toString()).toList(growable: false) ?? const [],
-      volunteerNotes: (data['volunteerNotes'] as List?)?.map((value) => value.toString()).toList(growable: false) ?? const [],
-      medicalNotes: (data['medicalNotes'] as List?)?.map((value) => value.toString()).toList(growable: false) ?? const [],
-      reportIds: (data['reportIds'] as List?)?.map((value) => value.toString()).toList(growable: false) ?? const [],
-      imageSignature: (data['imageSignature'] as List?)?.map((value) => (value as num).toDouble()).toList(growable: false) ?? const [],
+      feedingHistory:
+          (data['feedingHistory'] as List?)
+              ?.map((value) => value.toString())
+              .toList(growable: false) ??
+          const [],
+      volunteerNotes:
+          (data['volunteerNotes'] as List?)
+              ?.map((value) => value.toString())
+              .toList(growable: false) ??
+          const [],
+      medicalNotes:
+          (data['medicalNotes'] as List?)
+              ?.map((value) => value.toString())
+              .toList(growable: false) ??
+          const [],
+      reportIds:
+          (data['reportIds'] as List?)
+              ?.map((value) => value.toString())
+              .toList(growable: false) ??
+          const [],
+      imageSignature:
+          (data['imageSignature'] as List?)
+              ?.map((value) => (value as num).toDouble())
+              .toList(growable: false) ??
+          const [],
       currentStatus: _reportStatusFrom(data['currentStatus']?.toString()),
-      lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      lastUpdated:
+          (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
       matchedReportId: data['matchedReportId']?.toString(),
     );
   }
@@ -411,20 +519,21 @@ class FundraisingProject {
   final String? catId;
   final bool active;
 
-  double get progress => goalAmount <= 0 ? 0 : (raisedAmount / goalAmount).clamp(0.0, 1.0);
+  double get progress =>
+      goalAmount <= 0 ? 0 : (raisedAmount / goalAmount).clamp(0.0, 1.0);
 
   Map<String, dynamic> toMap() => {
-        'title': title,
-        'description': description,
-        'goalAmount': goalAmount,
-        'raisedAmount': raisedAmount,
-        'createdBy': createdBy,
-        'createdByName': createdByName,
-        'imageUrl': imageUrl,
-        'catId': catId,
-        'active': active,
-        'createdAt': Timestamp.fromDate(createdAt),
-      };
+    'title': title,
+    'description': description,
+    'goalAmount': goalAmount,
+    'raisedAmount': raisedAmount,
+    'createdBy': createdBy,
+    'createdByName': createdByName,
+    'imageUrl': imageUrl,
+    'catId': catId,
+    'active': active,
+    'createdAt': Timestamp.fromDate(createdAt),
+  };
 
   static FundraisingProject fromMap(String id, Map<String, dynamic> data) {
     return FundraisingProject(

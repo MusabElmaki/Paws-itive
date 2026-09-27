@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image/image.dart' as img;
 
 class CatMatchResult {
   const CatMatchResult({
@@ -15,7 +16,14 @@ class CatMatchResult {
   });
 
   final bool isMatch;
+
+  /// 0..1 visual similarity score, not an identity probability
+  /// (the similarity to the closest existing record).
   final double confidence;
+
+  /// Same value expressed as a 0–100 percentage for display.
+  int get likelihoodPercent => (confidence * 100).round();
+
   final String message;
   final List<double> signature;
   final String? existingCatId;
@@ -23,86 +31,144 @@ class CatMatchResult {
   final String? existingLocationName;
 }
 
+/// Lightweight perceptual cat matcher.
+///
+/// It decodes the actual image pixels (the old version mistakenly ran stats on
+/// the compressed JPEG bytes, so its scores were meaningless) and builds a
+/// 128-value signature:
+///   * a 64-bin RGB colour histogram (captures fur / coat colour), and
+///   * a 64-value 8×8 greyscale thumbnail (captures coarse markings/structure).
+/// Each half is L2-normalised, so cosine similarity between two signatures is a
+/// balanced blend of "same colours" and "same pattern" — a graded 0..1
+/// similarity score; it is not a calibrated probability.
 class CatMatchingService {
   CatMatchingService._();
 
   static final instance = CatMatchingService._();
 
-  static const double _threshold = 0.84;
+  /// Advisory threshold only. Linking requires a staff review.
+  static const double _reviewThreshold = 0.60;
+
+  static const int _binsPerChannel = 4; // 4*4*4 = 64-bin colour histogram
+  static const int _structSize = 8; // 8x8 = 64 greyscale structure values
 
   List<double> buildSignature(Uint8List bytes) {
-    final step = math.max(1, bytes.length ~/ 4096);
-    double sum = 0;
-    double sumSquares = 0;
-    int warm = 0;
-    int cool = 0;
-    int count = 0;
-
-    for (var index = 0; index < bytes.length; index += step) {
-      final value = bytes[index];
-      sum += value;
-      sumSquares += value * value;
-      if (value > 110 && value < 205) warm++;
-      if (value >= 205 || value < 50) cool++;
-      count++;
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      return List<double>.filled(
+        _binsPerChannel * _binsPerChannel * _binsPerChannel +
+            _structSize * _structSize,
+        0,
+      );
     }
 
-    final mean = count > 0 ? sum / count : 128.0;
-    final variance = count > 0 ? (sumSquares / count) - (mean * mean) : 0.0;
-    final stdDev = math.sqrt(variance.abs());
-    final warmRatio = count > 0 ? warm / count : 0.5;
-    final coolRatio = count > 0 ? cool / count : 0.3;
+    // --- Colour histogram on a 64x64 resample ---
+    final small = img.copyResize(decoded, width: 64, height: 64);
+    final hist = List<double>.filled(
+      _binsPerChannel * _binsPerChannel * _binsPerChannel,
+      0,
+    );
+    for (var y = 0; y < small.height; y++) {
+      for (var x = 0; x < small.width; x++) {
+        final p = small.getPixel(x, y);
+        final rb = (p.r.toInt().clamp(0, 255) * _binsPerChannel) ~/ 256;
+        final gb = (p.g.toInt().clamp(0, 255) * _binsPerChannel) ~/ 256;
+        final bb = (p.b.toInt().clamp(0, 255) * _binsPerChannel) ~/ 256;
+        hist[(rb * _binsPerChannel + gb) * _binsPerChannel + bb] += 1;
+      }
+    }
+    _l2Normalise(hist);
 
-    return [mean / 255.0, stdDev / 128.0, warmRatio, coolRatio];
+    // --- Coarse greyscale structure on an 8x8 resample ---
+    final tiny = img.copyResize(
+      decoded,
+      width: _structSize,
+      height: _structSize,
+    );
+    final struct = List<double>.filled(_structSize * _structSize, 0);
+    var sum = 0.0;
+    for (var y = 0; y < tiny.height; y++) {
+      for (var x = 0; x < tiny.width; x++) {
+        final p = tiny.getPixel(x, y);
+        final gray = 0.299 * p.r + 0.587 * p.g + 0.114 * p.b;
+        struct[y * _structSize + x] = gray;
+        sum += gray;
+      }
+    }
+    // Mean-subtract so overall brightness doesn't dominate, then L2-normalise.
+    final mean = struct.isEmpty ? 0.0 : sum / struct.length;
+    for (var i = 0; i < struct.length; i++) {
+      struct[i] -= mean;
+    }
+    _l2Normalise(struct);
+
+    return [...hist, ...struct];
   }
 
   Future<CatMatchResult> match(Uint8List bytes) async {
     final signature = buildSignature(bytes);
-    final snapshot = await FirebaseFirestore.instance
-        .collection('cats')
-        .orderBy('lastUpdated', descending: true)
-        .limit(50)
-        .get();
-
     String? bestId;
     String? bestName;
     String? bestLocation;
     double bestScore = 0;
-
-    for (final doc in snapshot.docs) {
-      final rawSignature = doc.data()['imageSignature'];
-      if (rawSignature is! List) continue;
-
-      final existing = rawSignature.map((value) => (value as num).toDouble()).toList(growable: false);
-      if (existing.length != signature.length) continue;
-
-      final similarity = _similarity(signature, existing);
-      if (similarity > bestScore) {
-        bestScore = similarity;
-        bestId = doc.id;
-        bestName = (doc.data()['name'] ?? '').toString();
-        bestLocation = (doc.data()['currentLocationName'] ?? '').toString();
+    QueryDocumentSnapshot<Map<String, dynamic>>? cursor;
+    while (true) {
+      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+          .collection('cats')
+          .orderBy(FieldPath.documentId)
+          .limit(200);
+      if (cursor != null) {
+        query = query.startAfterDocument(cursor);
       }
+      final page = await query.get();
+      for (final doc in page.docs) {
+        final data = doc.data();
+        if (data['archived'] == true || data['linkedTo'] != null) continue;
+        final raw = data['imageSignature'];
+        if (raw is! List ||
+            raw.length != signature.length ||
+            raw.any((v) => v is! num || !v.isFinite)) {
+          continue;
+        }
+        final existing = raw
+            .map((v) => (v as num).toDouble())
+            .toList(growable: false);
+        final score = _similarity(signature, existing);
+        if (score > bestScore) {
+          bestScore = score;
+          bestId = doc.id;
+          bestName = data['name']?.toString();
+          bestLocation = data['currentLocationName']?.toString();
+        }
+      }
+      if (page.docs.length < 200) break;
+      cursor = page.docs.last;
     }
 
-    if (bestId != null && bestScore >= _threshold) {
-      return CatMatchResult(
-        isMatch: true,
-        confidence: bestScore,
-        message: 'This cat may already exist.',
-        signature: signature,
-        existingCatId: bestId,
-        existingCatName: bestName,
-        existingLocationName: bestLocation,
-      );
-    }
-
+    final suggested = bestId != null && bestScore >= _reviewThreshold;
     return CatMatchResult(
-      isMatch: false,
+      isMatch: suggested,
       confidence: bestScore,
-      message: 'New cat detected.',
+      message: suggested
+          ? 'Similar photo found. A volunteer will review the suggestion.'
+          : 'New sighting saved.',
       signature: signature,
+      existingCatId: suggested ? bestId : null,
+      existingCatName: bestName,
+      existingLocationName: bestLocation,
     );
+  }
+
+  void _l2Normalise(List<double> v) {
+    var norm = 0.0;
+    for (final x in v) {
+      norm += x * x;
+    }
+    norm = math.sqrt(norm);
+    if (norm == 0) return;
+    for (var i = 0; i < v.length; i++) {
+      v[i] /= norm;
+    }
   }
 
   double _similarity(List<double> a, List<double> b) {

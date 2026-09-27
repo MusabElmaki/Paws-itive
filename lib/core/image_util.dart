@@ -4,9 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
-/// Stores cat photos as compressed base64 data URIs **inside Firestore** so the
-/// app does not depend on Firebase Storage (which requires the paid Blaze plan
-/// on new projects). Firestore allows ~1MB per document, so we downscale hard.
+/// Image compression and compatibility with legacy inline photos. New photos use Storage.
 class ImageUtil {
   ImageUtil._();
 
@@ -14,15 +12,30 @@ class ImageUtil {
 
   /// Decodes, downscales and JPEG-compresses [bytes], returning a data URI
   /// string. Returns null if the image can't be decoded.
-  static String? encodeThumbnail(Uint8List bytes, {int maxWidth = 480, int quality = 65}) {
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return null;
-    final resized = decoded.width > maxWidth ? img.copyResize(decoded, width: maxWidth) : decoded;
-    final jpg = img.encodeJpg(resized, quality: quality);
-    return '$_prefix${base64Encode(jpg)}';
+  static String? encodeThumbnail(
+    Uint8List bytes, {
+    int maxWidth = 480,
+    int quality = 65,
+  }) {
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return null;
+      final resized = decoded.width >= decoded.height
+          ? (decoded.width > maxWidth
+                ? img.copyResize(decoded, width: maxWidth)
+                : decoded)
+          : (decoded.height > maxWidth
+                ? img.copyResize(decoded, height: maxWidth)
+                : decoded);
+      final jpg = img.encodeJpg(resized, quality: quality);
+      return '$_prefix${base64Encode(jpg)}';
+    } catch (_) {
+      return null;
+    }
   }
 
-  static bool isDataUri(String? value) => value != null && value.startsWith('data:image');
+  static bool isDataUri(String? value) =>
+      value != null && value.startsWith('data:image');
 
   static Uint8List? _decodeDataUri(String value) {
     final index = value.indexOf('base64,');

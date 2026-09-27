@@ -1,21 +1,21 @@
 rules_version = '2';
-
-// Firebase Storage rules for UTM Paws-itive.
-// Cat report photos live under cats/{catId}/... and must be readable by any
-// signed-in user (so cat profiles render) and writable by any signed-in user
-// (so reporting an animal can upload its photo).
 service firebase.storage {
   match /b/{bucket}/o {
-    match /cats/{catId}/{fileName=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-                   && request.resource.size < 10 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+    function active() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.isSuspended == false;
     }
-
-    // Anything else stays locked down by default.
-    match /{allPaths=**} {
-      allow read, write: if false;
+    function admin() { return active() && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
+    match /reports/{uid}/{reportId}/{name} {
+      allow read: if active();
+      allow create: if resource == null && active() && request.auth.uid == uid && name == 'photo.jpg'
+        && request.resource.size < 1024 * 1024 && request.resource.contentType == 'image/jpeg';
     }
+    match /receipts/{uid}/{paymentId}/{name} {
+      allow read: if active() && (request.auth.uid == uid || admin());
+      allow create: if resource == null && active() && request.auth.uid == uid && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)|application/pdf');
+    }
+    match /cats/{path=**} { allow read: if active(); }
   }
 }

@@ -20,3 +20,11 @@ Thumbs.db
 
 # Generated
 *.log
+# Local backend tooling and secrets
+node_modules/
+functions/.env*
+functions/.secret*
+.firebase/
+artifacts/
+android/.gradle/
+**/ephemeral/
